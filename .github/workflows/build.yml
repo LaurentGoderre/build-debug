@@ -3,32 +3,37 @@ on: push
 
 jobs:
     build:
-        runs-on: 'ubuntu-latest'
+        strategy:
+            matrix:
+                os: [ubuntu-24.04, ubuntu-22.04, ubuntu-20.04]
+                buildkit: ['tianon/buildkit:0.13@sha256:dab7ad84db6d538ecae96cad77648ee21f47f0c1ecaabf91e5d5f527ecfa1556', 'moby/buildkit:v0.13.2']
+                scanner: ['docker/scout-sbom-indexer:1.14-doi', 'docker/scout-sbom-indexer:1.14', 'docker/scout-sbom-indexer:1.11-doi', 'docker/scout-sbom-indexer:1.11', 'docker/buildkit-syft-scanner:stable-1']
+        runs-on: ${{ matrix.os }}
         steps:
-            - name: test
+            - name: Checkout
+              uses: actions/checkout@v4
+            - name: Setup
+              env:
+                builderName: bashbrew-amd64
+                BASHBREW_BUILDKIT_IMAGE: ${{ matrix.buildkit }}
               run: |
-                SCAN_IMAGE='
-                    ARG image
-
-                    FROM ${image} as image
-
-                    FROM busybox AS scanner
-
-                    RUN --mount=type=bind,target=/scanner,from=docker/scout-sbom-indexer:1-doi \
-                        --mount=type=bind,target=/image,from=image \
-                        set -ex; \
-                        mkdir /out; \
-                        export DOCKER_SCOUT_ENVIRONMENT=indexer; \
-                        export DOCKER_SCOUT_SBOM_CATALOGERS=php-composer-lock,erlang-otp-application,lua-rock-cataloger; \
-                        export BUILDKIT_SCAN_DESTINATION=/out; \
-                        export BUILDKIT_SCAN_SOURCE=/image; \
-                        /scanner/sbom-indexer
-
-                    FROM scratch
-
-                    COPY --from=scanner /out /
-                '
-                image=node:22-bookworm-slim && arch=linux/amd64 && output=$(mktemp -d) \
-                && echo $SCAN_IMAGE | docker buildx b . --platform $arch -f - --build-arg image=$image -o $output \
-                && jq $output/image.spdx.json | column -ts $'\t' \
-                && rm -rf $output
+                docker buildx create \
+                  --name "$builderName" \
+                  --node "$builderName" \
+                  --platform "linux/amd64" \
+                  --driver docker-container \
+                  --driver-opt image="$BASHBREW_BUILDKIT_IMAGE" \
+                  --bootstrap
+            - name: test
+              env:
+                BUILDX_BUILDER: bashbrew-amd64
+                SCANNER: ${{ matrix.scanner }}
+              run: |
+                docker buildx b . --sbom="generator=$SCANNER" -o type=oci,dest=oci.tar
+                tar -xvf oci.tar
+                manifest="$(jq -r '.manifests[0].digest' index.json)"
+                attestation=$(jq -r '.manifests[] | select(.annotations).digest' "blobs/${manifest/://}")
+                sbom=$(jq -r '.layers[] | select(.annotations["in-toto.io/predicate-type"] == "https://spdx.dev/Document").digest' "blobs/${attestation/://}")
+                count=$(jq -r '.predicate.packages | length' "blobs/${sbom/://}")
+                echo $count
+                [ "$count" = "1" ] && echo exit 1 || echo "Pass"
