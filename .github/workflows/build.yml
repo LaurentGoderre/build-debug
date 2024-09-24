@@ -6,21 +6,20 @@ jobs:
         strategy:
             matrix:
                 os: [ubuntu-24.04, ubuntu-22.04, ubuntu-20.04]
-                image: ['laurentgoderre689/syft:broken', 'laurentgoderre689/syft:fix']
+                image: ['docker/scout-sbom-indexer:1.14.0', 'laurentgoderre689/scout-sbom-indexer:1.14.0-fix']
         runs-on: ${{ matrix.os }}
         steps:
-            - uses: imjasonh/setup-crane@v0.1
-            - name: crane
-              run: |
-                crane export --platform linux/amd64 traefik traefik.tar
-                mkdir traefik
-                tar -xf traefik.tar -C traefik
-            - name: test
-              env:
-                IMAGE: ${{ matrix.image }}
-                MOUNTPOINT: /run/src/core/sbom
-              run: |
-                docker run --platform linux/amd64 --rm \
-                    --mount type=bind,source=${PWD}/traefik,target=$MOUNTPOINT \
-                    $IMAGE \
-                    $MOUNTPOINT
+          - name: Checkout
+            uses: actions/checkout@v4
+          - name: Setup
+            run: |
+              docker buildx create \
+                --name "container-builder" \
+                --node "container-builder" \
+                --platform "linux/amd64" \
+                --driver docker-container \
+                --bootstrap --use
+          - name: test
+            env:
+              IMAGE: ${{ matrix.image }}
+            run: docker buildx b . --sbom="generator=$IMAGE"
