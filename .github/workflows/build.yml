@@ -6,11 +6,9 @@ jobs:
         strategy:
             matrix:
                 os: [ubuntu-24.04, ubuntu-22.04, ubuntu-20.04]
-                image: ['docker/scout-sbom-indexer:1.14.0', 'laurentgoderre689/scout-sbom-indexer:1.14.0-fix']
+                image: ['docker/scout-sbom-indexer:1.14.0', 'docker/scout-sbom-indexer:8ccd22f']
         runs-on: ${{ matrix.os }}
         steps:
-          - name: Checkout
-            uses: actions/checkout@v4
           - name: Setup
             run: |
               docker buildx create \
@@ -22,4 +20,4 @@ jobs:
           - name: test
             env:
               IMAGE: ${{ matrix.image }}
-            run: docker buildx b . --sbom="generator=$IMAGE"
+            run: echo 'FROM traefik' | docker buildx b . --sbom="generator=$IMAGE" -f -
