@@ -5,19 +5,23 @@ jobs:
     build:
         strategy:
             matrix:
-                os: [ubuntu-24.04, ubuntu-22.04, ubuntu-20.04]
-                image: ['docker/scout-sbom-indexer:1.14.0', 'docker/scout-sbom-indexer:8ccd22f']
-        runs-on: ${{ matrix.os }}
+                buildkit: ['tianon/buildkit@sha256:5668946519badfa6d31a2e6c360d30cbe339dab7e16e44f01afe7926702d3cf8', 'tianon/buildkit@sha256:e36bd5423e345d934689775c97073d404b2b3b1b2e836a0603eae035cc7a3e13']
+                scanner: ['docker/scout-sbom-indexer:1.14', 'laurentgoderre689/scout-sbom-indexer:extra']
+        runs-on: ubuntu-22.04
         steps:
           - name: Setup
+            env:
+              BUILDKIT_IMAGE: ${{ matrix.buildkit }}
             run: |
               docker buildx create \
                 --name "container-builder" \
                 --node "container-builder" \
                 --platform "linux/amd64" \
                 --driver docker-container \
+                --driver-opt image="$BUILDKIT_IMAGE" \
                 --bootstrap --use
           - name: test
             env:
-              IMAGE: ${{ matrix.image }}
-            run: echo 'FROM traefik' | docker buildx b . --sbom="generator=$IMAGE" -f -
+              SCANNER: ${{ matrix.scanner }}
+              EXTRA_SCANNERS: php-composer-lock-cataloger,erlang-otp-application-cataloger,lua-rock-cataloger,swipl-pack-cataloger
+            run: echo 'FROM swipl:9.3.6' | docker buildx b . --sbom="\"generator=$SCANNER\",\"EXTRA_SCANNERS=$EXTRA_SCANNERS\"" -f -
