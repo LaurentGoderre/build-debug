@@ -6,7 +6,7 @@ jobs:
         strategy:
             matrix:
                 buildkit: ['tianon/buildkit@sha256:5668946519badfa6d31a2e6c360d30cbe339dab7e16e44f01afe7926702d3cf8', 'tianon/buildkit@sha256:e36bd5423e345d934689775c97073d404b2b3b1b2e836a0603eae035cc7a3e13']
-                scanner: ['docker/scout-sbom-indexer:1.14', 'laurentgoderre689/scout-sbom-indexer:extra']
+                scanner: ['docker/scout-sbom-indexer:1.14', 'docker/scout-sbom-indexer:1.15']
         runs-on: ubuntu-22.04
         steps:
           - name: Setup
